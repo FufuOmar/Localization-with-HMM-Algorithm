@@ -1,23 +1,25 @@
-import numpy as np
 from enum import Enum
 
+# Each grid cell stores whether it is a wall and the probabilities used by HMM updates.
 class Cell:
     def __init__(self, isWall: bool, prob: float):
         self.isWall = isWall
-        self.posterior = prob
-        self.prior = prob
-        self.prediction = 0.00
+        self.posterior = prob   # Belief after incorporating sensor evidence P(s_t | z_1:t)
+        self.prior = prob       # Belief before current sensing step (or after previous update)
+        self.prediction = 0.00  # Temporary buffer for motion model output
         pass
 
 #Globals
+# Cardinal directions for control commands in the motion model.
 class Direction(Enum):
     N = "Northward"
     S = "Southward"
     E = "Eastward"
     W = "Westward"
 
-map = []
+map = []  # 2D matrix of Cell objects built from grid + initial probabilities
 
+# 1 = wall cell (not traversable), 0 = free cell.
 grid = [
     [0,0,1,1,1,1,0],
     [0,0,0,1,1,1,1],
@@ -35,8 +37,11 @@ location_probability = [
     [5.00,0.00,0.00,0.00,5.00,5.00,5.00]
 ]
 
+# Measurement update (Bayes filter):
+# 1) Compute unnormalized posterior = P(z_t | s_t) * prior for each free cell
+# 2) Normalize so all free-cell probabilities sum to 1
 def sensing(W: bool, N: bool, E: bool, S: bool):
-    z = [W,N,E,S]
+    z = [W,N,E,S]  # Sensor reading ordered as [West, North, East, South]
     total = 0
     for i in range(len(map)):
         for j in range(len(map[i])):
@@ -56,6 +61,8 @@ def sensing(W: bool, N: bool, E: bool, S: bool):
     print(f"Filtering after Evidence [{W},{N},{E},{S}]")
     print_probabilties()
            
+# For a hypothetical robot location (i, j), infer whether each adjacent side is a wall.
+# Then return the per-direction sensing likelihood terms.
 def check_surrounding(i,j,z):
     wall: bool
     #West
@@ -93,6 +100,9 @@ def check_surrounding(i,j,z):
     return west, north, east, south
     
 
+# Sensor model probabilities:
+# senses = what robot reports (1 wall, 0 free)
+# actual = ground truth in that direction (1 wall, 0 free)
 def probability_sensing(senses: bool, actual: bool):
     #If the robot senses a wall and theres actually a wall
     if senses == 1 and actual == 1:
@@ -107,6 +117,10 @@ def probability_sensing(senses: bool, actual: bool):
         return .05
     return -1 # Should never reach here
 
+# Motion prediction update:
+# Applies commanded direction with stochastic drift:
+#   straight = 0.75, left drift = 0.15, right drift = 0.10.
+# If motion would hit a wall/boundary, that probability "bounces" and stays in place.
 def moving(direction: Direction):
     probLeft = .15
     probRight = .1
@@ -195,6 +209,7 @@ def moving(direction: Direction):
                     map[i][j].prediction += probRight * map[i][j].posterior
                 else:
                     map[i][j-1].prediction += probRight * map[i][j].posterior
+    # Commit predicted distribution as the new belief state.
     for row in map:
         for element in row:
             if element.isWall:
@@ -211,6 +226,7 @@ def moving(direction: Direction):
 
 
 
+# Utility printer for current belief (in percent) over free cells.
 def print_probabilties():
     for row in map:
         for element in row:
@@ -221,6 +237,9 @@ def print_probabilties():
         print()
 
 
+# Program entry:
+# 1) Build world from grid and initial belief
+# 2) Alternate sensing and movement to perform localization over time
 def main():
     direction = Direction
     for i in range(len(grid)):
