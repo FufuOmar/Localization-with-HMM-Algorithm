@@ -6,14 +6,15 @@ class Cell:
         self.isWall = isWall
         self.posterior = prob
         self.prior = prob
+        self.prediction = 0.00
         pass
 
 #Globals
 class Direction(Enum):
-    NORTH = "North"
-    SOUTH = "South"
-    EAST = "East"
-    WEST = "West"
+    N = "Northward"
+    S = "Southward"
+    E = "Eastward"
+    W = "Westward"
 
 map = []
 
@@ -107,16 +108,113 @@ def probability_sensing(senses: bool, actual: bool):
     return -1 # Should never reach here
 
 def moving(direction: Direction):
-    if direction == Direction.NORTH:
+    probLeft = .15
+    probRight = .1
+    probStraight = .75
+    if direction == Direction.N:
         # Move north
-        print("Moving North")
-    return
+        print("Moving: N")
+        for i in range(len(map)):
+            for j in range(len(map)):
+                if map[i][j].isWall: # Its a wall
+                    continue
+                if j - 1 < 0 or map[i][j-1].isWall: # Wall
+                    map[i][j].prediction += probLeft * map[i][j].posterior # Drifting left (bounce)
+                else:
+                    map[i][j-1].prediction += probLeft * map[i][j].posterior # Drifting left
+                if j + 1 > len(map[0]) - 1 or map[i][j+1].isWall: # Wall
+                    map[i][j].prediction += probRight * map[i][j].posterior # Drifting right (bounce)
+                else:
+                    map[i][j+1].prediction += probRight * map[i][j].posterior # Drifting right
+                if i - 1 < 0 or map[i-1][j].isWall: # Wall
+                    map[i][j].prediction += probStraight * map[i][j].posterior # Straight (bounce)
+                else:
+                    map[i-1][j].prediction += probStraight * map[i][j].posterior # Straight
+    if direction == Direction.W:
+        print("Moving: W")
+        for i in range(len(map)):
+            for j in range(len(map[i])):
+                if map[i][j].isWall:
+                    continue
+                # Straight (west)
+                if j - 1 < 0 or map[i][j-1].isWall:
+                    map[i][j].prediction += probStraight * map[i][j].posterior
+                else:
+                    map[i][j-1].prediction += probStraight * map[i][j].posterior
+                # Left drift (south when moving west)
+                if i + 1 > len(map) - 1 or map[i+1][j].isWall:
+                    map[i][j].prediction += probLeft * map[i][j].posterior
+                else:
+                    map[i+1][j].prediction += probLeft * map[i][j].posterior
+                # Right drift (north when moving west)
+                if i - 1 < 0 or map[i-1][j].isWall:
+                    map[i][j].prediction += probRight * map[i][j].posterior
+                else:
+                    map[i-1][j].prediction += probRight * map[i][j].posterior
+
+    if direction == Direction.E:
+        print("Moving: E")
+        for i in range(len(map)):
+            for j in range(len(map[i])):
+                if map[i][j].isWall:
+                    continue
+                # Straight (east)
+                if j + 1 > len(map[0]) - 1 or map[i][j+1].isWall:
+                    map[i][j].prediction += probStraight * map[i][j].posterior
+                else:
+                    map[i][j+1].prediction += probStraight * map[i][j].posterior
+                # Left drift (north when moving east)
+                if i - 1 < 0 or map[i-1][j].isWall:
+                    map[i][j].prediction += probLeft * map[i][j].posterior
+                else:
+                    map[i-1][j].prediction += probLeft * map[i][j].posterior
+                # Right drift (south when moving east)
+                if i + 1 > len(map) - 1 or map[i+1][j].isWall:
+                    map[i][j].prediction += probRight * map[i][j].posterior
+                else:
+                    map[i+1][j].prediction += probRight * map[i][j].posterior
+
+    if direction == Direction.S:
+        print("Moving: S")
+        for i in range(len(map)):
+            for j in range(len(map[i])):
+                if map[i][j].isWall:
+                    continue
+                # Straight (south)
+                if i + 1 > len(map) - 1 or map[i+1][j].isWall:
+                    map[i][j].prediction += probStraight * map[i][j].posterior
+                else:
+                    map[i+1][j].prediction += probStraight * map[i][j].posterior
+                # Left drift (east when moving south)
+                if j + 1 > len(map[0]) - 1 or map[i][j+1].isWall:
+                    map[i][j].prediction += probLeft * map[i][j].posterior
+                else:
+                    map[i][j+1].prediction += probLeft * map[i][j].posterior
+                # Right drift (west when moving south)
+                if j - 1 < 0 or map[i][j-1].isWall:
+                    map[i][j].prediction += probRight * map[i][j].posterior
+                else:
+                    map[i][j-1].prediction += probRight * map[i][j].posterior
+    for row in map:
+        for element in row:
+            if element.isWall:
+                print("####", end="    ")
+                continue
+            else:
+                print(f"{element.prediction*100:.2f}", end="    ")
+            element.posterior = element.prediction
+            element.prior = element.prediction
+            element.prediction = 0.0
+        print()
+
+
+
 
 
 def print_probabilties():
     for row in map:
         for element in row:
-            if element.posterior == 0:
+            if element.isWall:
                 print("####", end="    ")
             else:
                 print(f"{element.posterior*100:.2f}", end="    ")
@@ -135,8 +233,14 @@ def main():
     print("Initial Location Probablilities")
     print_probabilties()
     sensing(0,0,0,0)
-    moving(direction.NORTH)
-
+    moving(direction.N)
+    sensing(0,0,1,0)
+    moving(direction.N)
+    sensing(0,1,1,0)
+    moving(direction.W)
+    sensing(0,1,0,0)
+    moving(direction.S)
+    sensing(0,0,0,0)
 
 if __name__ == "__main__":
     main()
